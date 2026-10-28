@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ساعد المعلمة سلمى في ترتيب الطابور</title>
+<style>
+/* ===== الألوان: عدّل المتغيرات هنا فقط لتغيير مظهر اللعبة ===== */
+:root{
+  --bg:#eaf4f7; --bg2:#d9ecf2; --card:#ffffff;
+  --ink:#1f3540; --muted:#5d7783; --line:#c9dde5;
+  --primary:#1f8a8a; --primary-dark:#176c6c;
+  --accent:#f2b84b; --good:#2e9e5b; --bad:#d9534f;
+  --bubble:#fff8e1; --bubble-line:#f2d78a;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic","Noto Sans Arabic",Arial,sans-serif;
+  background:linear-gradient(180deg,var(--bg),var(--bg2));
+  color:var(--ink); min-height:100dvh;
+}
+[hidden]{display:none!important}
+button{font-family:inherit}
+#app{max-width:1100px;margin:0 auto;padding:12px 14px 22px;display:flex;flex-direction:column;gap:12px}
+
+/* ===== الرأس والتقدم ===== */
+.top h1{margin:4px 0 10px;text-align:center;font-size:clamp(1.3rem,3.6vw,2rem);color:var(--primary-dark)}
+.progress{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.75);padding:8px 14px;border-radius:16px}
+.progress-text{font-weight:700;white-space:nowrap}
+.bar{flex:1;height:16px;background:#dbe9ee;border-radius:99px;overflow:hidden}
+.bar-fill{height:100%;width:0;background:linear-gradient(270deg,var(--good),#6cc78f);border-radius:99px;transition:width .6s ease}
+.stars-box{font-weight:800;font-size:1.2rem;color:#c98a00;white-space:nowrap}
+
+/* ===== المشهد ===== */
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;align-items:start}
+.stage>*,#app>*{min-width:0}
+html,body{overflow-x:hidden}
+.card{position:relative;background:var(--card);border-radius:22px;padding:16px;box-shadow:0 6px 24px rgba(31,53,64,.12)}
+.card.enter{animation:enter .45s ease}
+@keyframes enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+.student-row{display:flex;align-items:center;gap:16px}
+.student-fig{width:96px;flex:none;text-align:center}
+.fig{width:96px;height:144px}
+.fig svg,.teacher-fig svg{width:100%;height:100%;display:block}
+.student-name{font-weight:800;margin-top:4px;font-size:1.15rem}
+
+.bubble{position:relative;background:var(--bubble);border:2px solid var(--bubble-line);border-radius:18px;padding:10px 14px;font-size:1.05rem;line-height:1.5}
+.bubble.pop{animation:bpop .35s ease}
+@keyframes bpop{0%{transform:scale(.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+.student-bubble::after{content:"";position:absolute;right:-14px;top:34px;width:0;height:0;border:9px solid transparent;border-left:14px solid var(--bubble-line);border-right:0}
+
+.problem{
+  margin:14px 0;padding:18px 10px;background:#f5fbfd;border:2px dashed var(--line);border-radius:18px;
+  display:flex;justify-content:center;align-items:center;min-height:120px;overflow:hidden;
+  color:var(--ink);direction:rtl;font-size:56px
+}
+.problem>.seq{flex:none}
+.problem-error{color:var(--bad);font-size:1rem}
+
+/* ===== رسم التعبير الرياضي (من اليمين لليسار) ===== */
+.seq{display:inline-flex;align-items:center;direction:rtl;gap:.2em;font-weight:700;line-height:1.25}
+.tok{display:inline-flex;align-items:center}
+.num,.op,.eq{unicode-bidi:isolate}
+.op{color:var(--primary-dark)}
+.group{direction:rtl;gap:.1em}
+.par{direction:ltr;unicode-bidi:isolate;font-weight:300;font-size:1.35em;line-height:1;display:inline-block;transform:scaleY(1.1)}
+.pow{direction:rtl;align-items:flex-start}
+.pow .exp{font-size:.55em;margin-top:-.15em;margin-inline-start:.06em}
+.rad{direction:rtl;align-items:stretch}
+.rad-sign{position:relative;flex:none;width:.6em;margin-top:.035em}
+.cbrt .rad-sign{width:.78em}
+.rad-sign svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rad-sign path{stroke-width:.07em;vector-effect:non-scaling-stroke}
+.rad-body{display:inline-flex;align-items:center;border-top:.07em solid currentColor;padding:.08em .1em 0 .12em}
+.rad-index{position:absolute;right:.02em;top:-.03em;font-size:.42em;line-height:1;font-weight:800;unicode-bidi:isolate}
+.expr-sm{display:inline-flex;font-size:30px}
+
+/* ===== الخيارات ===== */
+.options{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.opt{
+  font-size:2.1rem;font-weight:800;min-height:78px;border:3px solid var(--primary);background:#fff;color:var(--primary-dark);
+  border-radius:16px;cursor:pointer;transition:transform .12s,background .15s;touch-action:manipulation
+}
+.opt:hover:not(:disabled){background:#e6f5f5;transform:translateY(-2px)}
+.opt:active:not(:disabled){transform:scale(.97)}
+.opt:disabled{cursor:default}
+.opt.correct{background:var(--good);border-color:var(--good);color:#fff}
+.opt.wrong{background:#fdeaea;border-color:var(--bad);color:var(--bad);opacity:.8;text-decoration:line-through;animation:shake .45s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+
+.hint{margin-top:12px;background:#fff4e0;border:2px solid #f2c46d;border-radius:14px;padding:10px 14px;font-size:1.05rem;line-height:1.7}
+.hint-title{font-weight:800;color:#a86a00}
+.hint-step{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.hint-lab{font-weight:700}
+.pts{position:absolute;top:70px;left:50%;font-size:2.2rem;font-weight:800;color:#d99a00;pointer-events:none;animation:floatUp 1.4s ease-out forwards}
+@keyframes floatUp{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-60px)}}
+
+/* ===== المعلمة ===== */
+.teacher{display:flex;flex-direction:column;align-items:center;gap:10px}
+.teacher-bubble{width:100%;text-align:center;min-height:64px;display:flex;align-items:center;justify-content:center}
+.teacher-bubble::after{content:"";position:absolute;bottom:-14px;left:50%;margin-left:-9px;width:0;height:0;border:9px solid transparent;border-top:14px solid var(--bubble-line);border-bottom:0}
+.teacher-fig{width:130px;height:195px}
+.teacher-name{font-weight:800;color:var(--primary-dark)}
+
+/* ===== الطابور ===== */
+.queue-wrap{background:rgba(255,255,255,.7);border-radius:20px;padding:12px 12px 14px}
+.queue-title{margin:0 0 8px;font-size:1rem;color:var(--muted)}
+.queue{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
+.slot{background:#fff;border:2px dashed var(--line);border-radius:14px;padding:8px 4px 6px;text-align:center}
+.slot.filled{border-style:solid;border-color:var(--good);animation:slotpop .45s ease}
+@keyframes slotpop{0%{transform:scale(.9)}60%{transform:scale(1.07)}100%{transform:scale(1)}}
+.slot-fig{width:72%;aspect-ratio:2/3;margin:0 auto}
+.slot:not(.filled) .slot-fig{background:#eef5f8;border-radius:45% 45% 12px 12px/32% 32% 12px 12px}
+.slot-fig svg{width:100%;height:100%;display:block}
+.slot-name{font-size:.85rem;font-weight:700;min-height:1.3em;margin-top:2px}
+.slot-num{margin:2px auto 0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-weight:800;line-height:28px;font-size:.95rem}
+.slot.filled .slot-num{background:var(--good)}
+.walker{position:fixed;transform-origin:0 0;z-index:60;pointer-events:none}
+.walker svg{width:100%;height:100%;display:block}
+
+/* ===== النوافذ ===== */
+.overlay{position:fixed;inset:0;background:rgba(20,40,50,.55);display:flex;align-items:center;justify-content:center;padding:14px;z-index:100;overflow:auto}
+#reviewOverlay{z-index:110}
+.panel{background:#fff;border-radius:24px;padding:22px;max-width:900px;width:100%;max-height:92dvh;overflow:auto;text-align:center;animation:enter .4s ease}
+.panel h2{margin:0 0 10px;color:var(--primary-dark);font-size:clamp(1.5rem,4vw,2.2rem)}
+.lineup{display:flex;align-items:flex-end;justify-content:center;flex-wrap:wrap;gap:6px;margin:14px 0}
+.lineup .p{width:clamp(36px,7vw,68px)}
+.lineup .p.t{width:clamp(52px,10vw,96px)}
+.lineup svg{width:100%;display:block}
+.final-stars{font-size:1.4rem;font-weight:800;color:#c98a00;margin:6px 0 14px}
+.btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn{font-size:1.15rem;font-weight:700;padding:12px 22px;border-radius:14px;border:3px solid var(--primary);background:#fff;color:var(--primary-dark);cursor:pointer}
+.btn.primary{background:var(--primary);color:#fff}
+.btn:hover{filter:brightness(.95)}
+.review-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.review-head h2{margin:0}
+.review-note{color:var(--muted);margin:4px 0 14px;text-align:start}
+.rv{border:2px solid var(--line);border-radius:16px;padding:10px 14px;margin-bottom:12px;text-align:start}
+.rv h3{margin:0 0 6px;font-size:1.1rem;color:var(--primary-dark)}
+.rv-row{display:flex;align-items:center;gap:10px;padding:4px 0}
+.rv-row .eq{width:1.2em;font-size:28px;font-weight:700;text-align:center;flex:none}
+.rv-row .lab{margin-inline-start:auto;color:var(--muted);font-size:.9rem}
+.rv-row.last .seq{color:var(--good)}
+
+/* ===== الجوال ===== */
+@media (max-width:760px){
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .teacher{order:-1;flex-direction:row-reverse;align-items:center;gap:12px}
+  .teacher-fig{width:64px;height:96px;flex:none}
+  .teacher-name{display:none}
+  .teacher-bubble{min-height:0;text-align:start;justify-content:flex-start;flex:1}
+  .teacher-bubble::after{bottom:auto;left:auto;right:-14px;top:50%;margin:-9px 0 0;border:9px solid transparent;border-left:14px solid var(--bubble-line);border-right:0}
+  .options{grid-template-columns:repeat(2,1fr)}
+  .progress{gap:8px;padding:8px 10px;font-size:.9rem}
+  .student-fig,.fig{width:78px}
+  .fig{height:117px}
+}
+@media (max-width:640px){
+  .queue{grid-template-columns:repeat(5,1fr)}
+  .slot-name{font-size:.75rem}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <h1>ساعد المعلمة سلمى في ترتيب الطابور</h1>
+    <div class="progress">
+      <div id="progressText" class="progress-text"></div>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div id="barFill" class="bar-fill"></div></div>
+      <div id="starsBox" class="stars-box"></div>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="card" id="card">
+      <div class="student-row">
+        <div class="student-fig">
+          <div id="studentFig" class="fig"></div>
+          <div id="studentName" class="student-name"></div>
+        </div>
+        <div class="bubble student-bubble">أنا أقف في المكان الذي يساوي ناتج هذه المسألة!</div>
+      </div>
+      <div id="problem" class="problem" role="img"></div>
+      <div id="options" class="options"></div>
+      <div id="hint" class="hint" hidden></div>
+    </section>
+
+    <aside class="teacher">
+      <div id="teacherBubble" class="bubble teacher-bubble" aria-live="polite"></div>
+      <div id="teacherFig" class="teacher-fig"></div>
+      <div class="teacher-name">المعلمة سلمى</div>
+    </aside>
+  </main>
+
+  <section class="queue-wrap">
+    <h2 class="queue-title">طابور الصف</h2>
+    <div id="queue" class="queue"></div>
+  </section>
+</div>
+
+<div id="endOverlay" class="overlay" hidden>
+  <div class="panel">
+    <h2>أحسنت! الطابور مرتب</h2>
+    <div id="lineup" class="lineup"></div>
+    <p id="finalStars" class="final-stars"></p>
+    <div class="btn-row">
+      <button id="againBtn" class="btn primary">العب مرة أخرى</button>
+      <button id="reviewBtn" class="btn">راجع الحلول</button>
+    </div>
+  </div>
+</div>
+
+<div id="reviewOverlay" class="overlay" hidden>
+  <div class="panel">
+    <div class="review-head">
+      <h2>حلول المسائل</h2>
+      <button id="closeReview" class="btn">رجوع</button>
+    </div>
+    <p class="review-note">أولوية العمليات: الأقواس، ثم الجذور والأسس، ثم الضرب والقسمة، ثم الجمع والطرح.</p>
+    <div id="reviewList"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   كيف تعدّل اللعبة؟
+   - الأسئلة: المصفوفة QUESTIONS أدناه. اكتب التعبير في الحقل expr بالأرقام
+     الغربية أو الهندية، وبالترتيب الذي يقرؤه الطالب (يبدأ من اليمين).
+     الرموز: + - * /  ^ (أس)  sqrt( ) جذر تربيعي  cbrt( ) جذر تكعيبي  ( ) أقواس
+     مثال: (20-cbrt(216))/7      والأس على عدد فقط مثل 3^2
+   - rank هو ترتيب الطالب ويجب أن يساوي ناتج التعبير (تتحقق اللعبة وتحذّرك في console).
+   - الألوان: متغيرات :root في أعلى الملف. ألوان ملابس الطلبة: skin/hair/shirt/scarf.
+   ===================================================================== */
+
+// ==LOGIC-START==
+const QUESTIONS = [
+  {rank:1,  name:'أحمد',  girl:false, skin:'#f0c39a', hair:'#2f2118', shirt:'#4f8ef7',                    expr:'2*7-sqrt(169)',            options:[1,3,7,13]},
+  {rank:2,  name:'سارة',  girl:true,  skin:'#e8b88f', scarf:'#e58fb0', shirt:'#8e6bbf',                    expr:'(20-cbrt(216))/7',         options:[2,4,7,14]},
+  {rank:3,  name:'يوسف',  girl:false, skin:'#d9a67a', hair:'#1f1a17', shirt:'#2a9d8f',                    expr:'sqrt(225)-3*4',            options:[3,12,18,48]},
+  {rank:4,  name:'لينا',  girl:true,  skin:'#f3cfa8', scarf:'#6cc3b5', shirt:'#f4a259',                    expr:'3^2-sqrt(25)',             options:[4,1,6,14]},
+  {rank:5,  name:'عمر',   girl:false, skin:'#e0b087', hair:'#4a3326', shirt:'#e76f51',                    expr:'2*cbrt(216)-sqrt(49)',     options:[5,7,12,19]},
+  {rank:6,  name:'هدى',   girl:true,  skin:'#efc29b', scarf:'#f2c14e', shirt:'#5b8db8',                    expr:'4^2/8+cbrt(64)',           options:[6,2,5,10]},
+  {rank:7,  name:'خالد',  girl:false, skin:'#cf9a6e', hair:'#19130f', shirt:'#6a994e',                    expr:'sqrt(196)-2^3+1',          options:[7,5,6,9]},
+  {rank:8,  name:'ريم',   girl:true,  skin:'#f1c8a0', scarf:'#9b5de5', shirt:'#ef8fa1',                    expr:'cbrt(729)-3^2/9',          options:[8,1,6,9]},
+  {rank:9,  name:'مالك',  girl:false, skin:'#e6b98f', hair:'#5a3b27', shirt:'#3d5a80',                    expr:'cbrt(343)+4/2',            options:[9,2,7,11]},
+  {rank:10, name:'دانة',  girl:true,  skin:'#e9bd94', scarf:'#4cc9f0', shirt:'#f77f9e',                    expr:'(cbrt(1000)-sqrt(25))*2',  options:[10,5,15,20]}
+];
+// ملاحظة: الطالبات مرسومات بحجاب. لتغيير ذلك اجعل girl:false أو عدّل دالة avatarSVG.
+const TEACHER = {girl:true, teacher:true, skin:'#eac09a', scarf:'#5e548e', shirt:'#2a6f77'};
+
+/* ---------- الأرقام الهندية ---------- */
+const DIGITS = '٠١٢٣٤٥٦٧٨٩';
+function toHindiDigits(v){ return String(v).replace(/\d/g, d => DIGITS[+d]); }
+const H = toHindiDigits;
+function toWesternDigits(s){
+  return String(s).replace(/[٠-٩]/g, d => DIGITS.indexOf(d))
+    .replace(/[−–]/g,'-').replace(/×/g,'*').replace(/÷/g,'/');
+}
+
+/* ---------- تحليل التعبير ---------- */
+function tokenize(src){
+  const s = toWesternDigits(src), t = [];
+  let i = 0;
+  while(i < s.length){
+    const c = s[i];
+    if(/\s/.test(c)){ i++; continue; }
+    if(/\d/.test(c)){ let j=i; while(j<s.length && /\d/.test(s[j])) j++; t.push({k:'num', v:+s.slice(i,j)}); i=j; continue; }
+    if(/[a-z]/i.test(c)){ let j=i; while(j<s.length && /[a-z]/i.test(s[j])) j++; t.push({k:'fn', v:s.slice(i,j).toLowerCase()}); i=j; continue; }
+    if('+-*/^()'.includes(c)){ t.push({k:c}); i++; continue; }
+    throw new Error('رمز غير مفهوم في التعبير: ' + c);
+  }
+  return t;
+}
+function parse(src){
+  const t = tokenize(src); let p = 0;
+  const peek = () => t[p];
+  const expect = k => { const x = t[p++]; if(!x || x.k !== k) throw new Error('الأقواس غير متطابقة في: ' + src); };
+  function seq(){
+    const items = [operand()];
+    while(peek() && ['+','-','*','/'].includes(peek().k)){
+      items.push({type:'op', v:t[p++].k});
+      items.push(operand());
+    }
+    return {type:'seq', items};
+  }
+  function operand(){
+    const x = t[p++];
+    if(!x) throw new Error('تعبير ناقص: ' + src);
+    if(x.k === 'num'){
+      if(peek() && peek().k === '^'){
+        p++; const e = t[p++];
+        if(!e || e.k !== 'num') throw new Error('الأس يجب أن يكون عددًا: ' + src);
+        return {type:'pow', base:{type:'num', v:x.v}, exp:e.v};
+      }
+      return {type:'num', v:x.v};
+    }
+    if(x.k === '('){ const inner = seq(); expect(')'); return {type:'paren', inner}; }
+    if(x.k === 'fn'){
+      if(x.v !== 'sqrt' && x.v !== 'cbrt') throw new Error('دالة غير معروفة: ' + x.v);
+      expect('('); const inner = seq(); expect(')');
+      return {type:x.v, inner};
+    }
+    throw new Error('تعبير غير صحيح: ' + src);
+  }
+  const ast = seq();
+  if(p < t.length) throw new Error('تعبير غير صحيح: ' + src);
+  return ast;
+}
+
+/* ---------- الحساب (مع تحذيرات عند الخروج عن الأعداد الطبيعية) ---------- */
+function evalNode(n, w){
+  switch(n.type){
+    case 'num': return n.v;
+    case 'pow': return Math.pow(n.base.v, n.exp);
+    case 'paren': return evalSeq(n.inner, w);
+    case 'sqrt': {
+      const v = evalSeq(n.inner, w), r = Math.round(Math.sqrt(v));
+      if(r*r !== v) w.push('جذر تربيعي غير تام للعدد ' + v);
+      if(v > 225) w.push('الجذر التربيعي للعدد ' + v + ' أكبر من حدود الحفظ (٢٢٥)');
+      return r;
+    }
+    case 'cbrt': {
+      const v = evalSeq(n.inner, w), r = Math.round(Math.cbrt(v));
+      if(r*r*r !== v) w.push('جذر تكعيبي غير تام للعدد ' + v);
+      if(v > 1000) w.push('الجذر التكعيبي للعدد ' + v + ' أكبر من حدود الحفظ (١٠٠٠)');
+      return r;
+    }
+    default: return evalSeq(n, w);
+  }
+}
+function evalSeq(seq, w){
+  w = w || [];
+  const it = seq.items;
+  const nums = [evalNode(it[0], w)], adds = [];
+  for(let i = 1; i < it.length; i += 2){
+    const op = it[i].v, b = evalNode(it[i+1], w);
+    if(op === '*'){ nums[nums.length-1] *= b; }
+    else if(op === '/'){
+      const a = nums[nums.length-1];
+      if(b === 0 || a % b !== 0) w.push('قسمة غير تامة: ' + a + ' ÷ ' + b);
+      nums[nums.length-1] = a / b;
+    } else { adds.push(op); nums.push(b); }
+  }
+  let r = nums[0];
+  for(let k = 0; k < adds.length; k++){
+    r = adds[k] === '+' ? r + nums[k+1] : r - nums[k+1];
+    if(r < 0) w.push('ناتج وسيط سالب');
+  }
+  return r;
+}
+
+/* ---------- خطوات الحل حسب الأولوية ---------- */
+const isNum = n => n.type === 'num';
+function stepSeq(seq){
+  const it = seq.items;
+  if(it.length === 1 && isNum(it[0])) return null;
+
+  // 1) الأقواس
+  if(it.some(x => x.type === 'paren')){
+    let label = null;
+    const items = it.map(x => {
+      if(x.type !== 'paren') return x;
+      const r = stepSeq(x.inner);
+      if(!r) return x.inner.items[0];
+      label = label || ('داخل القوس: ' + r.label);
+      if(r.node.items.length === 1 && isNum(r.node.items[0])) return r.node.items[0];
+      return {type:'paren', inner:r.node};
+    });
+    return {node:{type:'seq', items}, label: label || 'الأقواس'};
+  }
+  // 2) الجذور والأسس
+  if(it.some(x => x.type === 'sqrt' || x.type === 'cbrt' || x.type === 'pow')){
+    let hasRoot = false, hasPow = false, inside = false;
+    const items = it.map(x => {
+      if(x.type === 'pow'){ hasPow = true; return {type:'num', v:Math.pow(x.base.v, x.exp)}; }
+      if(x.type === 'sqrt' || x.type === 'cbrt'){
+        if(x.inner.items.length === 1 && isNum(x.inner.items[0])){
+          hasRoot = true; const v = x.inner.items[0].v;
+          return {type:'num', v: x.type === 'sqrt' ? Math.round(Math.sqrt(v)) : Math.round(Math.cbrt(v))};
+        }
+        inside = true; return {type:x.type, inner:stepSeq(x.inner).node};
+      }
+      return x;
+    });
+    const label = inside ? 'ما داخل الجذر' : hasRoot && hasPow ? 'الأسس والجذور' : hasRoot ? 'الجذور' : 'الأسس';
+    return {node:{type:'seq', items}, label};
+  }
+  // 3) الضرب والقسمة (عملية واحدة في كل خطوة)
+  let i = it.findIndex(x => x.type === 'op' && (x.v === '*' || x.v === '/'));
+  let label;
+  if(i >= 0){
+    const op = it[i].v, a = it[i-1].v, b = it[i+1].v;
+    label = op === '*' ? 'الضرب' : 'القسمة';
+    return {node:{type:'seq', items:[...it.slice(0,i-1), {type:'num', v: op === '*' ? a*b : a/b}, ...it.slice(i+2)]}, label};
+  }
+  // 4) الجمع والطرح
+  i = it.findIndex(x => x.type === 'op');
+  const op = it[i].v, a = it[i-1].v, b = it[i+1].v;
+  label = op === '+' ? 'الجمع' : 'الطرح';
+  return {node:{type:'seq', items:[...it.slice(0,i-1), {type:'num', v: op === '+' ? a+b : a-b}, ...it.slice(i+2)]}, label};
+}
+function generateSteps(ast){
+  const steps = [{node:ast, label:null}];
+  let cur = ast;
+  for(let n = 0; n < 60; n++){
+    const r = stepSeq(cur);
+    if(!r) break;
+    steps.push(r); cur = r.node;
+  }
+  return steps;
+}
+
+/* ---------- ميزات المسألة (لكتابة التلميح) ---------- */
+function features(ast){
+  const f = {paren:false, root:false, pow:false, mul:false, div:false, add:false, sub:false, order:[]};
+  (function walk(s){
+    s.items.forEach(x => {
+      if(x.type === 'op'){ if(x.v==='*') f.mul=true; else if(x.v==='/') f.div=true; else if(x.v==='+') f.add=true; else f.sub=true; }
+      else if(x.type === 'paren'){ f.paren = true; walk(x.inner); }
+      else if(x.type === 'sqrt' || x.type === 'cbrt'){ f.root = true; walk(x.inner); }
+      else if(x.type === 'pow'){ f.pow = true; }
+    });
+  })(ast);
+  if(f.paren) f.order.push('الأقواس');
+  if(f.root || f.pow) f.order.push(f.root && f.pow ? 'الأسس والجذور' : f.root ? 'الجذور' : 'الأسس');
+  if(f.mul || f.div) f.order.push(f.mul && f.div ? 'الضرب والقسمة' : f.mul ? 'الضرب' : 'القسمة');
+  if(f.add || f.sub) f.order.push(f.add && f.sub ? 'الجمع والطرح' : f.add ? 'الجمع' : 'الطرح');
+  return f;
+}
+
+/* ---------- نص للقراءة (aria) وللاختبار ---------- */
+function nodeText(n, h){
+  switch(n.type){
+    case 'num': return h(n.v);
+    case 'op': return {'+':'+','-':'−','*':'×','/':'÷'}[n.v];
+    case 'pow': return h(n.base.v) + ' أُسّ ' + h(n.exp);
+    case 'paren': return '(' + seqToText(n.inner, h) + ')';
+    case 'sqrt': return 'الجذر التربيعي لـ ' + seqToText(n.inner, h);
+    case 'cbrt': return 'الجذر التكعيبي لـ ' + seqToText(n.inner, h);
+    default: return seqToText(n, h);
+  }
+}
+function seqToText(seq, h){ h = h || H; return seq.items.map(x => nodeText(x, h)).join(' '); }
+
+/* ---------- تجهيز الأسئلة والتحقق منها ---------- */
+function prepareQuestions(list){
+  list.forEach(q => { q.ast = parse(q.expr); q.steps = generateSteps(q.ast); q.feat = features(q.ast); });
+}
+function validateQuestions(list){
+  const warns = [];
+  list.forEach(q => {
+    const w = []; let val;
+    try{ val = evalSeq(q.ast, w); }catch(e){ w.push(String(e)); }
+    if(val !== q.rank) w.push('الناتج ' + val + ' لا يساوي الترتيب ' + q.rank);
+    if(!q.options.includes(q.rank)) w.push('الخيارات لا تحتوي الإجابة الصحيحة');
+    if(new Set(q.options).size !== q.options.length) w.push('يوجد خيار مكرر');
+    if(q.options.length !== 4) w.push('عدد الخيارات ليس ٤');
+    w.forEach(m => warns.push('سؤال الترتيب ' + q.rank + ' (' + q.name + '): ' + m));
+  });
+  const ranks = list.map(q => q.rank).sort((a,b) => a-b);
+  if(ranks.some((r,i) => r !== i+1)) warns.push('الترتيبات يجب أن تكون من ١ إلى ' + list.length + ' دون تكرار');
+  warns.forEach(m => console.warn('⚠ ' + m));
+  if(!warns.length) console.log('✔ تم التحقق: ناتج كل مسألة يساوي ترتيب الطالب، وكل الخطوات أعداد طبيعية.');
+  return warns;
+}
+// ==LOGIC-END==
+
+/* ===================== واجهة اللعبة ===================== */
+const $ = id => document.getElementById(id);
+function el(tag, cls, text){ const e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
+function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* ---------- رسم الشخصيات (تصميم خاص) ---------- */
+function avatarSVG(o){
+  const skin = o.skin || '#f1c8a0', hair = o.hair || '#3a2a20', shirt = o.shirt || '#4f8ef7', scarf = o.scarf || '#e58fb0';
+  const girl = !!o.girl;
+  let s = '<svg viewBox="0 0 100 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">';
+  s += `<path d="M14 150 V122 Q14 100 36 95 H64 Q86 100 86 122 V150 Z" fill="${shirt}"/>`;
+  s += '<path d="M40 95 L50 108 L60 95 Z" fill="#fff" opacity=".9"/>';
+  s += `<rect x="43" y="82" width="14" height="16" rx="5" fill="${skin}"/>`;
+  let ey;
+  if(girl){
+    ey = 64;
+    s += `<path d="M17 66 Q13 22 50 20 Q87 22 83 66 Q86 94 68 104 L32 104 Q14 94 17 66 Z" fill="${scarf}"/>`;
+    s += `<ellipse cx="50" cy="64" rx="20" ry="23" fill="${skin}"/>`;
+  } else {
+    ey = 60;
+    s += `<ellipse cx="50" cy="60" rx="24" ry="26" fill="${skin}"/>`;
+    s += `<path d="M25 58 Q22 30 50 29 Q78 30 75 58 Q70 44 50 44 Q30 44 25 58Z" fill="${hair}"/>`;
+  }
+  s += `<circle cx="41" cy="${ey}" r="2.8" fill="#2b2b2b"/><circle cx="59" cy="${ey}" r="2.8" fill="#2b2b2b"/>`;
+  s += `<circle cx="35" cy="${ey+9}" r="4" fill="#f29b9b" opacity=".35"/><circle cx="65" cy="${ey+9}" r="4" fill="#f29b9b" opacity=".35"/>`;
+  s += `<path d="M42 ${ey+11} Q50 ${ey+19} 58 ${ey+11}" fill="none" stroke="#8a4b3a" stroke-width="2.4" stroke-linecap="round"/>`;
+  if(o.teacher){
+    s += `<circle cx="41" cy="${ey}" r="7" fill="none" stroke="#444" stroke-width="1.6"/><circle cx="59" cy="${ey}" r="7" fill="none" stroke="#444" stroke-width="1.6"/><path d="M48 ${ey} H52" stroke="#444" stroke-width="1.6"/>`;
+    s += '<rect x="60" y="112" width="26" height="34" rx="3" fill="#fff" stroke="#8a6d3b" stroke-width="2"/><rect x="68" y="109" width="10" height="6" rx="2" fill="#8a6d3b"/>';
+    s += '<path d="M65 124 H81 M65 131 H81 M65 138 H76" stroke="#9db4bd" stroke-width="2" stroke-linecap="round"/>';
+  }
+  return s + '</svg>';
+}
+
+/* ---------- رسم التعبير الرياضي ---------- */
+function renderSeq(seq){
+  const w = el('span', 'tok seq');
+  seq.items.forEach(x => w.append(renderNode(x)));
+  return w;
+}
+function renderNode(n){
+  switch(n.type){
+    case 'num': return el('span', 'tok num', H(n.v));
+    case 'op':  return el('span', 'tok op', {'+':'+','-':'−','*':'×','/':'÷'}[n.v]);
+    case 'pow': {
+      const w = el('span', 'tok pow');
+      w.append(el('span', 'num', H(n.base.v)), el('span', 'exp num', H(n.exp)));
+      return w;
+    }
+    case 'paren': {
+      // القوس الفاتح على اليمين وشكله ")" والمغلق على اليسار وشكله "("
+      const w = el('span', 'tok group');
+      w.append(el('span', 'par', ')'), renderSeq(n.inner), el('span', 'par', '('));
+      return w;
+    }
+    case 'sqrt':
+    case 'cbrt': {
+      const w = el('span', 'tok rad' + (n.type === 'cbrt' ? ' cbrt' : ''));
+      const sign = el('span', 'rad-sign');
+      sign.innerHTML = '<svg viewBox="0 0 20 40" preserveAspectRatio="none" aria-hidden="true"><path d="M19 24 L16 22 L10 38 L1 1" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+      if(n.type === 'cbrt') sign.append(el('span', 'rad-index', H(3)));
+      const body = el('span', 'rad-body');
+      body.append(renderSeq(n.inner));
+      w.append(sign, body);
+      return w;
+    }
+    default: return renderSeq(n);
+  }
+}
+function fitProblem(){
+  const box = $('problem'), seq = box.firstElementChild;
+  if(!seq || !seq.classList.contains('seq')) return;
+  let fs = window.innerWidth < 640 ? 52 : 64;
+  seq.style.flexWrap = 'nowrap'; seq.style.flex = 'none';
+  box.style.fontSize = fs + 'px';
+  const avail = box.clientWidth - 24;
+  while(seq.offsetWidth > avail && fs > 40){ fs -= 2; box.style.fontSize = fs + 'px'; }
+  if(seq.offsetWidth > avail){ seq.style.flexWrap = 'wrap'; seq.style.flex = '0 1 auto'; seq.style.justifyContent = 'center'; }
+}
+
+/* ---------- حالة اللعبة ---------- */
+const state = {order:[], pos:0, placed:{}, stars:0, wrong:0, locked:false};
+let slots = [];
+const TOTAL = QUESTIONS.length;
+
+const OK_MSGS = [
+  q => `أحسنت يا ${q.name}! وجدتَ مكانك.`,
+  q => `ممتاز! تقدّم رائع في ترتيب الطابور.`,
+  q => `إجابة صحيحة، بارك الله فيك.`,
+  q => `عمل رائع! ${q.name} يقف في مكانه الصحيح.`
+];
+const WRONG_MSGS = [
+  'ليس بعد. راجع أولوية العمليات وحاول مرة أخرى.',
+  'سأعطيك الخطوة الأولى لتساعدك. فكّر بالترتيب.',
+  'لا بأس، الخطأ يعلّمنا. جرّب خيارًا آخر.'
+];
+
+function say(text){
+  const b = $('teacherBubble');
+  b.textContent = text;
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+}
+function updateStars(){ $('starsBox').textContent = '★ ' + H(state.stars) + ' / ' + H(TOTAL * 3); }
+function updateProgress(){
+  const n = Object.keys(state.placed).length;
+  $('progressText').textContent = `تم ترتيب ${H(n)} من ${H(TOTAL)} طلاب`;
+  $('barFill').style.width = (n / TOTAL * 100) + '%';
+  document.querySelector('.bar').setAttribute('aria-valuenow', n);
+}
+function buildQueue(){
+  const box = $('queue'); box.replaceChildren(); slots = [];
+  for(let r = 1; r <= TOTAL; r++){
+    const s = el('div', 'slot');
+    s.dataset.rank = r;
+    s.append(el('div', 'slot-fig'), el('div', 'slot-name'), el('div', 'slot-num', H(r)));
+    box.append(s); slots.push(s);
+  }
+}
+
+function startGame(){
+  state.order = shuffle(QUESTIONS.map((_, i) => i));
+  state.pos = 0; state.placed = {}; state.stars = 0; state.wrong = 0; state.locked = false;
+  $('endOverlay').hidden = true; $('reviewOverlay').hidden = true;
+  buildQueue(); updateProgress(); updateStars();
+  say('هيا نرتّب الطابور معًا! حلّ مسألة كل طالب لتعرف مكانه.');
+  showQuestion();
+}
+
+function showQuestion(){
+  const q = QUESTIONS[state.order[state.pos]];
+  state.wrong = 0; state.locked = false;
+  const card = $('card'); card.classList.remove('enter'); void card.offsetWidth; card.classList.add('enter');
+  $('studentFig').innerHTML = avatarSVG(q);
+  $('studentName').textContent = q.name;
+  const pb = $('problem');
+  pb.replaceChildren(renderSeq(q.ast));
+  pb.setAttribute('aria-label', seqToText(q.ast));
+  $('hint').hidden = true; $('hint').replaceChildren();
+  const box = $('options'); box.replaceChildren();
+  shuffle(q.options).forEach(v => {
+    const b = el('button', 'opt'); b.type = 'button'; b.dataset.v = v;
+    b.append(el('span', 'num', H(v)));
+    b.addEventListener('click', () => onAnswer(b, q));
+    box.append(b);
+  });
+  fitProblem();
+}
+
+function showHint(q){
+  const h = $('hint'); h.hidden = false; h.replaceChildren();
+  h.append(el('div', 'hint-title', 'تلميح: التزم بأولوية العمليات'));
+  h.append(el('div', '', 'الترتيب في هذه المسألة: ' + q.feat.order.join('، ثم ') + '.'));
+  if(state.wrong >= 2 && q.steps.length > 1){
+    const row = el('div', 'hint-step');
+    row.append(el('span', 'hint-lab', 'الخطوة الأولى (' + q.steps[1].label + '):'));
+    const ex = el('span', 'expr-sm'); ex.append(renderSeq(q.steps[1].node));
+    row.append(ex); h.append(row);
+  }
+}
+
+function onAnswer(btn, q){
+  if(state.locked || btn.disabled) return;
+  const v = Number(btn.dataset.v);
+  if(v === q.rank){
+    state.locked = true;
+    const gained = state.wrong === 0 ? 3 : state.wrong === 1 ? 2 : 1;
+    state.stars += gained;
+    btn.classList.add('correct');
+    $('options').querySelectorAll('.opt').forEach(b => b.disabled = true);
+    $('hint').hidden = true;
+    say(pick(OK_MSGS)(q));
+    const pts = el('div', 'pts', '★'.repeat(gained)); $('card').append(pts); setTimeout(() => pts.remove(), 1500);
+    updateStars();
+    const wait = new Promise(r => setTimeout(r, 2000));
+    const walk = new Promise(r => setTimeout(r, 500)).then(() => walkToSlot(q));
+    Promise.all([wait, walk]).then(nextStudent);
+  } else {
+    state.wrong++;
+    btn.classList.add('wrong'); btn.disabled = true;
+    showHint(q);
+    say(WRONG_MSGS[Math.min(state.wrong - 1, WRONG_MSGS.length - 1)]);
+  }
+}
+
+function fillSlot(q){
+  const slot = slots[q.rank - 1];
+  slot.querySelector('.slot-fig').innerHTML = avatarSVG(q);
+  slot.querySelector('.slot-name').textContent = q.name;
+  slot.classList.add('filled');
+  state.placed[q.rank] = q;
+  updateProgress();
+}
+
+function walkToSlot(q){
+  return new Promise(resolve => {
+    const svg = $('studentFig').querySelector('svg');
+    const s = svg.getBoundingClientRect();
+    const slot = slots[q.rank - 1];
+    const tr = slot.getBoundingClientRect();
+    if(tr.top < 0 || tr.bottom > window.innerHeight) slot.scrollIntoView({block:'center'});
+    const t = slot.querySelector('.slot-fig').getBoundingClientRect();
+    const walker = el('div', 'walker'); walker.innerHTML = avatarSVG(q);
+    Object.assign(walker.style, {left:s.left+'px', top:s.top+'px', width:s.width+'px', height:s.height+'px'});
+    document.body.append(walker); svg.style.visibility = 'hidden';
+    const finish = () => { fillSlot(q); walker.remove(); resolve(); };
+    if(!walker.animate){ finish(); return; }
+    const dx = t.left - s.left, dy = t.top - s.top, sc = t.width / s.width;
+    const N = 30, frames = [];
+    for(let i = 0; i <= N; i++){
+      const p = i / N;
+      const bob = Math.abs(Math.sin(p * Math.PI * 4)) * 16 * Math.sin(p * Math.PI);
+      frames.push({transform: `translate(${dx*p}px, ${dy*p - bob}px) scale(${1 + (sc-1)*p})`});
+    }
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const a = walker.animate(frames, {duration: reduce ? 200 : 1000, easing:'ease-in-out', fill:'forwards'});
+    a.onfinish = finish; a.oncancel = finish;
+  });
+}
+
+function nextStudent(){
+  state.pos++;
+  if(state.pos >= state.order.length){ finishGame(); return; }
+  if(window.scrollY > 0) window.scrollTo({top:0, behavior:'smooth'});
+  showQuestion();
+}
+
+function finishGame(){
+  say('الطابور مرتب بالكامل. شكرًا لمساعدتك!');
+  const lu = $('lineup'); lu.replaceChildren();
+  const t = el('div', 'p t'); t.innerHTML = avatarSVG(TEACHER); lu.append(t);
+  QUESTIONS.slice().sort((a, b) => a.rank - b.rank).forEach(q => {
+    const p = el('div', 'p'); p.innerHTML = avatarSVG(q); lu.append(p);
+  });
+  $('finalStars').textContent = `مجموع النجوم: ★ ${H(state.stars)} من ${H(TOTAL * 3)}`;
+  $('endOverlay').hidden = false;
+}
+
+function buildReview(){
+  const list = $('reviewList'); list.replaceChildren();
+  QUESTIONS.slice().sort((a, b) => a.rank - b.rank).forEach(q => {
+    const card = el('div', 'rv');
+    card.append(el('h3', '', `الترتيب ${H(q.rank)} — ${q.name}`));
+    q.steps.forEach((st, i) => {
+      const row = el('div', 'rv-row' + (i === q.steps.length - 1 ? ' last' : ''));
+      row.append(el('span', 'eq', i === 0 ? '' : '='));
+      const ex = el('span', 'expr-sm'); ex.append(renderSeq(st.node)); row.append(ex);
+      if(st.label) row.append(el('span', 'lab', st.label));
+      else row.append(el('span', 'lab', 'المسألة'));
+      card.append(row);
+    });
+    list.append(card);
+  });
+}
+
+/* ---------- التشغيل ---------- */
+$('teacherFig').innerHTML = avatarSVG(TEACHER);
+$('againBtn').addEventListener('click', startGame);
+$('reviewBtn').addEventListener('click', () => { buildReview(); $('reviewOverlay').hidden = false; });
+$('closeReview').addEventListener('click', () => { $('reviewOverlay').hidden = true; });
+window.addEventListener('resize', fitProblem);
+
+try{
+  prepareQuestions(QUESTIONS);
+  validateQuestions(QUESTIONS);
+  startGame();
+}catch(e){
+  console.error(e);
+  $('problem').replaceChildren(el('div', 'problem-error', 'خطأ في بيانات الأسئلة: ' + e.message));
+}
+</script>
+</body>
+</html>
